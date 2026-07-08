@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Recommendation System</title>
+    <script>
+        let moviePage = 0; // To track the current movie page
+
+        // Fetch and display movies for the current page
+        function fetchMovies() {
+            fetch(`/show_movies?page=${moviePage}`)
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('movies-container');
+                    container.innerHTML = '';
+                    if (data.movies && data.movies.length > 0) {
+                        data.movies.forEach(movie => {
+                            const movieElement = document.createElement('p');
+                            movieElement.textContent = `${movie.movieId}: ${movie.title} - Genres: ${movie.genres.join(', ')}`;
+                            container.appendChild(movieElement);
+                        });
+                    } else {
+                        container.textContent = 'No more movies to display.';
+                    }
+
+                    // Update navigation buttons
+                    const buttonContainer = document.getElementById('movies-button-container');
+                    buttonContainer.innerHTML = `
+                        <button onclick="showPreviousMovies()" ${moviePage === 0 ? 'disabled' : ''}>Previous 10 Movies</button>
+                        <button onclick="showNextMovies()">Next 10 Movies</button>
+                    `;
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Load the dataset
+        function loadDataset() {
+            const loadingStatus = document.getElementById('loading-status');
+            const mongoStatusContainer = document.getElementById('mongo-status-container');
+            loadingStatus.textContent = 'Loading dataset...';
+
+            fetch('/load_data', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    loadingStatus.textContent = ''; // Clear loading message
+
+                    // Display MongoDB status if available
+                    if (data.mongo_status) {
+                        const mongoStatus = data.mongo_status;
+                        mongoStatusContainer.innerHTML = `
+                            <p><strong>MongoDB Status:</strong></p>
+                            <p>Movies Collection: ${mongoStatus.movies ? 'Inserted' : 'Already Exists'}</p>
+                            <p>Ratings Collection: ${mongoStatus.ratings ? 'Inserted' : 'Already Exists'}</p>
+                            <p>Tags Collection: ${mongoStatus.tags ? 'Inserted' : 'Already Exists'}</p>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    loadingStatus.textContent = 'Error loading dataset.';
+                });
+        }
+
+        // Submit the user's liked movies
+        function submitLikedMovies() {
+            const userLikesInput = document.getElementById('user-likes-input').value;
+            const userLikes = userLikesInput.split(',').map(id => parseInt(id.trim()));
+
+            fetch('/select_movies', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_likes: userLikes })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Get movie recommendations with the selected algorithm
+        function getRecommendations() {
+            const algorithm = document.getElementById('algorithm-select').value;
+            fetch('/recommend', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ algorithm: algorithm })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('recommendations-container');
+                    container.innerHTML = '';
+                    if (data.recommendations) {
+                        data.recommendations.forEach(movie => {
+                            const movieDiv = document.createElement('div');
+                            movieDiv.innerHTML = `
+                                <p>${movie.title} (${movie.year})</p>
+                                <button onclick="submitFeedback(${movie.movieId}, true)">Like</button>
+                                <button onclick="submitFeedback(${movie.movieId}, false)">Dislike</button>
+                            `;
+                            container.appendChild(movieDiv);
+                        });
+                    } else {
+                        container.textContent = 'No recommendations found.';
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Submit feedback for a movie
+        function submitFeedback(movieId, liked) {
+            fetch('/feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ feedback: [{ movieId: movieId, liked: liked }] })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Refresh recommendations with the selected algorithm
+        function refreshRecommendations() {
+            const algorithm = document.getElementById('algorithm-select').value;
+            fetch('/refresh_recommendations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ algorithm: algorithm })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('recommendations-container');
+                    container.innerHTML = '';
+                    if (data.recommendations) {
+                        data.recommendations.forEach(movie => {
+                            const movieDiv = document.createElement('div');
+                            movieDiv.innerHTML = `
+                                <p>${movie.title} (${movie.year})</p>
+                                <button onclick="submitFeedback(${movie.movieId}, true)">Like</button>
+                                <button onclick="submitFeedback(${movie.movieId}, false)">Dislike</button>
+                            `;
+                            container.appendChild(movieDiv);
+                        });
+                    } else {
+                        container.textContent = 'No recommendations found.';
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Show next 10 movies
+        function showNextMovies() {
+            moviePage++;
+            fetchMovies();
+        }
+
+        // Show previous 10 movies
+        function showPreviousMovies() {
+            if (moviePage > 0) {
+                moviePage--;
+                fetchMovies();
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <h1>Welcome to the Movie Recommendation System</h1>
+
+    <h2>1. Load Dataset</h2>
+    <button onclick="loadDataset()">Load Data</button>
+    <p id="loading-status"></p>
+    <div id="mongo-status-container"></div>
+
+    <h2>2. View Movies</h2>
+    <div id="movies-button-container">
+        <button onclick="fetchMovies()">Show First 10 Movies</button>
+    </div>
+    <div id="movies-container"></div>
+
+    <h2>3. Select Movies You Like</h2>
+    <p>Enter the IDs of the movies you like, separated by commas:</p>
+    <input type="text" id="user-likes-input" placeholder="e.g., 1, 42, 57">
+    <button onclick="submitLikedMovies()">Submit Liked Movies</button>
+
+    <h2>4. Select Recommendation Algorithm</h2>
+    <p>Select one of the following recommendation algorithms:</p>
+    <select id="algorithm-select">
+        <option value="svd">SVD</option>
+        <option value="collaborative">Collaborative</option>
+        <option value="hybrid" selected>Hybrid</option>
+    </select>
+
+    <h2>5. Get Recommendations</h2>
+    <button onclick="getRecommendations()">Get Recommendations</button>
+    <div id="recommendations-container"></div>
+
+    <h2>6. Refresh Recommendations</h2>
+    <button onclick="refreshRecommendations()">Refresh Recommendations</button>
+</body>
+
+</html>

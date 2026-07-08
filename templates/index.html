@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Movie Recommendation System</title>
+    <style>
+        /* General layout styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+        }
+
+        /* Main content container uses most of the screen */
+        #main-content {
+            flex: 1;
+            padding: 20px;
+            max-width: 80%;
+            margin: 0 auto;
+        }
+
+        /* Sidebar styling */
+        #user-profile {
+            width: 300px;
+            padding: 15px;
+            border-left: 1px solid #ccc;
+            background-color: #f9f9f9;
+            position: fixed;
+            top: 0;
+            right: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        /* Button styling */
+        .btn {
+            border-radius: 8px;
+            padding: 10px 20px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin: 5px 0;
+            font-size: 1rem;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn:hover {
+            background-color: #45a049;
+        }
+
+        /* Styling for small tab buttons */
+        .tab-btn {
+            border-radius: 8px;
+            padding: 5px 10px;
+            cursor: pointer;
+            border: none;
+            background-color: #eee;
+            margin-right: 5px;
+            font-size: 0.9rem;
+        }
+
+        .tab-btn.active {
+            background-color: #ddd;
+            font-weight: bold;
+        }
+
+        /* Error message styling */
+        .error-message {
+            font-size: 0.9rem;
+            margin-top: 5px;
+            min-height: 20px;
+        }
+
+        /* Movie listing styling */
+        .movie-item {
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+        }
+
+        /* Table styling for My Movies tab */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid #ccc;
+        }
+
+        th,
+        td {
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+    <script>
+        let moviePage = 0; // To track the current movie page
+        let moviesMapping = {}; // Global mapping: movieId -> movie title
+
+        // Toggle the user input field based on the selected algorithm.
+        function toggleInputFields() {
+            const algorithm = document.getElementById("algorithm-select").value;
+            const likedMoviesContainer = document.getElementById("liked-movies-container");
+            const directorInputContainer = document.getElementById("director-input-container");
+            if (algorithm === "directors") {
+                likedMoviesContainer.style.display = "none";
+                directorInputContainer.style.display = "block";
+            } else {
+                likedMoviesContainer.style.display = "block";
+                directorInputContainer.style.display = "none";
+            }
+        }
+
+        window.onload = function () {
+            document.getElementById("algorithm-select").addEventListener("change", toggleInputFields);
+            toggleInputFields();
+        };
+
+        // Fetch and display movies in the main area (showing movie ID, title, and genres).
+        function fetchMovies() {
+            fetch(`/show_movies?page=${moviePage}`, { credentials: "include" })
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById("movies-container");
+                    container.innerHTML = "";
+                    if (data.movies && data.movies.length > 0) {
+                        data.movies.forEach(movie => {
+                            const movieElement = document.createElement("div");
+                            movieElement.classList.add("movie-item");
+                            movieElement.textContent = `(${movie.movieId}) ${movie.title} - Genres: ${movie.genres.join(", ")}`;
+                            container.appendChild(movieElement);
+                        });
+                    } else {
+                        container.textContent = "No more movies to display.";
+                    }
+                    const buttonContainer = document.getElementById("movies-button-container");
+                    buttonContainer.innerHTML = `
+            <button class="btn" onclick="showPreviousMovies()" ${moviePage === 0 ? "disabled" : ""}>Previous 10 Movies</button>
+            <button class="btn" onclick="showNextMovies()">Next 10 Movies</button>
+          `;
+                })
+                .catch(error => console.error("Error:", error));
+        }
+
+        // Load dataset and build moviesMapping.
+        function loadDataset() {
+            const loadingStatus = document.getElementById("loading-status");
+            const mongoStatusContainer = document.getElementById("mongo-status-container");
+            loadingStatus.textContent = "Loading dataset...";
+
+            fetch("/load_data", { method: "POST", credentials: "include" })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    loadingStatus.textContent = "";
+                    // Build the mapping from movieId to title.
+                    moviesMapping = {};
+                    data.movies.forEach(movie => {
+                        moviesMapping[movie.movieId] = movie.title;
+                    });
+                    if (data.mongo_status) {
+                        const mongoStatus = data.mongo_status;
+                        mongoStatusContainer.innerHTML = `
+              <p><strong>MongoDB Status:</strong></p>
+              <p>Movies Collection: ${mongoStatus.movies ? "Inserted" : "Already Exists"}</p>
+              <p>Ratings Collection: ${mongoStatus.ratings ? "Inserted" : "Already Exists"}</p>
+              <p>Tags Collection: ${mongoStatus.tags ? "Inserted" : "Already Exists"}</p>
+              <p>Directors Collection: ${mongoStatus.directors}</p>
+            `;
+                    }
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    loadingStatus.textContent = "Error loading dataset.";
+                });
+        }
+
+        // Get recommendations.
+        function getRecommendations() {
+            const algorithm = document.getElementById("algorithm-select").value;
+            let payload = { algorithm: algorithm };
+            if (algorithm === "directors") {
+                const directorInput = document.getElementById("director-input").value;
+                payload.director = directorInput;
+            } else {
+                const userLikesInput = document.getElementById("user-likes-input").value;
+                const userLikes = userLikesInput.split(",").map(id => parseInt(id.trim()));
+                payload.user_likes = userLikes;
+            }
+            fetch("/recommend", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                credentials: "include"
+            })
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById("recommendations-container");
+                    container.innerHTML = "";
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        data.recommendations.forEach(movie => {
+                            const movieDiv = document.createElement("div");
+                            movieDiv.classList.add("movie-item");
+                            movieDiv.innerHTML = `
+                <p>(${movie.movieId}) ${movie.title} (${movie.year})</p>
+                <button class="btn" onclick="submitFeedback(${movie.movieId}, true)">Like</button>
+                <button class="btn" onclick="submitFeedback(${movie.movieId}, false)">Dislike</button>
+              `;
+                            container.appendChild(movieDiv);
+                        });
+                    } else {
+                        container.textContent = "No recommendations found.";
+                    }
+                })
+                .catch(error => console.error("Error:", error));
+        }
+
+        // Submit feedback.
+        function submitFeedback(movieId, liked) {
+            fetch("/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ feedback: [{ movieId, liked }] }),
+                credentials: "include"
+            })
+                .then(response => response.json())
+                .then(data => alert(data.message))
+                .catch(error => console.error("Error:", error));
+        }
+
+        // Refresh recommendations.
+        function refreshRecommendations() {
+            const algorithm = document.getElementById("algorithm-select").value;
+            let payload = { algorithm: algorithm };
+            if (algorithm === "directors") {
+                const directorInput = document.getElementById("director-input").value;
+                payload.director = directorInput;
+            } else {
+                const userLikesInput = document.getElementById("user-likes-input").value;
+                const userLikes = userLikesInput.split(",").map(id => parseInt(id.trim()));
+                payload.user_likes = userLikes;
+            }
+            fetch("/refresh_recommendations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                credentials: "include"
+            })
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById("recommendations-container");
+                    container.innerHTML = "";
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        data.recommendations.forEach(movie => {
+                            const movieDiv = document.createElement("div");
+                            movieDiv.classList.add("movie-item");
+                            movieDiv.innerHTML = `
+                <p>(${movie.movieId}) ${movie.title} (${movie.year})</p>
+                <button class="btn" onclick="submitFeedback(${movie.movieId}, true)">Like</button>
+                <button class="btn" onclick="submitFeedback(${movie.movieId}, false)">Dislike</button>
+              `;
+                            container.appendChild(movieDiv);
+                        });
+                    } else {
+                        container.textContent = "No recommendations found.";
+                    }
+                })
+                .catch(error => console.error("Error:", error));
+        }
+
+        function showNextMovies() { moviePage++; fetchMovies(); }
+        function showPreviousMovies() { if (moviePage > 0) { moviePage--; fetchMovies(); } }
+
+        // -----------------------------
+        // User Profile and Authentication Functions
+        // -----------------------------
+        function toggleUserProfile() {
+            const content = document.getElementById("user-profile-content");
+            content.style.display = content.style.display === "none" ? "block" : "none";
+            loadProfile();
+        }
+
+        // Switch between "Login" and "Register" tabs.
+        function switchAuthTab(tabId) {
+            const loginTab = document.getElementById("login-tab");
+            const registerTab = document.getElementById("register-tab");
+            const loginBtn = document.getElementById("login-tab-btn");
+            const registerBtn = document.getElementById("register-tab-btn");
+
+            if (tabId === "login") {
+                loginTab.style.display = "block";
+                registerTab.style.display = "none";
+                loginBtn.classList.add("active");
+                registerBtn.classList.remove("active");
+            } else {
+                loginTab.style.display = "none";
+                registerTab.style.display = "block";
+                loginBtn.classList.remove("active");
+                registerBtn.classList.add("active");
+            }
+        }
+
+        function loginUser() {
+                const username = document.getElementById("login-username").value;
+                const password = document.getElementById("login-password").value;
+                const errorEl = document.getElementById("login-error");
+
+                fetch("/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username, password }),
+                    credentials: "include"
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.message === "Logged in successfully.") {
+                            errorEl.style.color = "green";
+                            errorEl.textContent = data.message;
+                            loadProfile();
+
+                            // Prompt for session management here
+                            promptSessionManagement();
+
+                        } else {
+                            errorEl.style.color = "red";
+                            errorEl.textContent = data.message;
+                        }
+                    })
+                    .catch(error => {
+                        errorEl.style.color = "red";
+                        errorEl.textContent = "Error logging in.";
+                        console.error("Error:", error);
+                    });
+            }
+
+
+        function registerUser() {
+            const username = document.getElementById("reg-username").value;
+            const name = document.getElementById("reg-name").value;
+            const age = parseInt(document.getElementById("reg-age").value);
+            const country = document.getElementById("reg-country").value;
+            const password = document.getElementById("reg-password").value;
+            const errorEl = document.getElementById("register-error");
+
+            fetch("/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, name, age, country, password }),
+                credentials: "include"
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message === "User registered successfully.") {
+                        errorEl.style.color = "green";
+                        errorEl.textContent = data.message;
+                        switchAuthTab("login");
+                    } else {
+                        errorEl.style.color = "red";
+                        errorEl.textContent = data.message;
+                    }
+                })
+                .catch(error => {
+                    errorEl.style.color = "red";
+                    errorEl.textContent = "Error registering.";
+                    console.error("Error:", error);
+                });
+        }
+
+        function logoutUser() {
+                fetch("/logout", { credentials: "include" })
+                    .then(response => {
+                        if (!response.ok) throw new Error('Logout failed');
+                        return response.json();
+                    })
+                    .then(data => {
+                        alert(data.message);
+                        document.getElementById("profile-tabs").style.display = "none";
+                        document.getElementById("auth-options").style.display = "block";
+                        localStorage.clear();
+                        sessionStorage.clear();
+                    })
+                    .catch(error => {
+                        console.error("Error logging out:", error);
+                    });
+            }
+
+
+
+        function showProfileInfo() {
+            document.getElementById("profile-info").style.display = "block";
+            document.getElementById("user-movies").style.display = "none";
+            document.getElementById("profile-tab-btn").classList.add("active");
+            document.getElementById("movies-tab-btn").classList.remove("active");
+        }
+
+        function showUserMovies() {
+            document.getElementById("profile-info").style.display = "none";
+            document.getElementById("user-movies").style.display = "block";
+            document.getElementById("movies-tab-btn").classList.add("active");
+            document.getElementById("profile-tab-btn").classList.remove("active");
+        }
+
+        // Load user profile and convert liked/disliked movie IDs into movie names using moviesMapping.
+        function loadProfile() {
+            fetch("/profile", { credentials: "include" })
+                .then(response => {
+                    if (response.status === 200) return response.json();
+                    else throw new Error("Not logged in");
+                })
+                .then(data => {
+                    const profile = data.profile;
+                    document.getElementById("profile-name").innerText = "Hello, " + profile.name;
+                    // Build table for liked and disliked movies.
+                    const likedNames = profile.liked_movies.map(id => moviesMapping[id] || id);
+                    const dislikedNames = profile.disliked_movies.map(id => moviesMapping[id] || id);
+                    let tableHtml = "<table><tr><th>Liked Movies</th><th>Disliked Movies</th></tr>";
+                    const maxLength = Math.max(likedNames.length, dislikedNames.length);
+                    for (let i = 0; i < maxLength; i++) {
+                        tableHtml += "<tr>";
+                        tableHtml += "<td>" + (likedNames[i] ? likedNames[i] : "") + "</td>";
+                        tableHtml += "<td>" + (dislikedNames[i] ? dislikedNames[i] : "") + "</td>";
+                        tableHtml += "</tr>";
+                    }
+                    tableHtml += "</table>";
+                    document.getElementById("movies-table-container").innerHTML = tableHtml;
+
+                    document.getElementById("profile-tabs").style.display = "block";
+                    document.getElementById("auth-options").style.display = "none";
+                    showProfileInfo();
+                })
+                .catch(error => {
+                    console.log(error);
+                    document.getElementById("profile-tabs").style.display = "none";
+                    document.getElementById("auth-options").style.display = "block";
+                });
+        }
+        function promptSessionManagement() {
+                const decision = confirm("Would you like to save your liked and disliked movies from this session to your profile? Click 'OK' to save or 'Cancel' to clear this session.");
+
+                fetch("/manage_session", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ action: decision ? "save" : "clear" })
+                })
+                    .then(response => response.json())
+                    .then(data => alert(data.message))
+                    .catch(error => console.error("Error:", error));
+            }
+
+        function deleteProfile() {
+            if (confirm("Are you sure you want to delete your profile? This cannot be undone.")) {
+                fetch("/delete_profile", { method: "POST", credentials: "include" })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                        document.getElementById("profile-tabs").style.display = "none";
+                        document.getElementById("auth-options").style.display = "block";
+                    })
+                    .catch(error => console.error("Error:", error));
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="main-content">
+        <h1>Welcome to the Movie Recommendation System</h1>
+
+        <h2>1. Load Dataset</h2>
+        <button class="btn" onclick="loadDataset()">Load Data</button>
+        <p id="loading-status">Dataset not loaded yet.</p>
+        <div id="mongo-status-container"></div>
+
+        <h2>2. View Movies</h2>
+        <div id="movies-button-container">
+            <button class="btn" onclick="fetchMovies()">Show First 10 Movies</button>
+        </div>
+        <div id="movies-container"></div>
+
+        <h2>3. Select Recommendation Algorithm</h2>
+        <p>Select one of the following recommendation algorithms:</p>
+        <select id="algorithm-select">
+            <option value="svd">SVD</option>
+            <option value="content">Content</option>
+            <option value="hybrid" selected>Hybrid</option>
+            <option value="directors">Directors</option>
+        </select>
+
+        <!-- User input container -->
+        <div id="user-input-container">
+            <div id="liked-movies-container">
+                <h2>4. Enter Liked Movies</h2>
+                <p>Enter the IDs of the movies you like, separated by commas:</p>
+                <input type="text" id="user-likes-input" placeholder="e.g., 1, 42, 57" />
+            </div>
+            <div id="director-input-container" style="display: none;">
+                <h2>4. Enter Director's Name</h2>
+                <p>Enter the director's name:</p>
+                <input type="text" id="director-input" placeholder="e.g., Steven Spielberg" />
+            </div>
+        </div>
+
+        <h2>5. Get Recommendations</h2>
+        <button class="btn" onclick="getRecommendations()">Get Recommendations</button>
+        <div id="recommendations-container"></div>
+
+        <h2>6. Refresh Recommendations</h2>
+        <button class="btn" onclick="refreshRecommendations()">Refresh Recommendations</button>
+    </div>
+
+    <!-- User Profile Sidebar -->
+    <div id="user-profile">
+        <button class="btn" onclick="toggleUserProfile()">User Profile</button>
+        <div id="user-profile-content" style="display: none;">
+            <div id="auth-options">
+                <div style="margin-bottom: 5px;">
+                    <button id="login-tab-btn" class="tab-btn active" onclick="switchAuthTab('login')">Login</button>
+                    <button id="register-tab-btn" class="tab-btn" onclick="switchAuthTab('register')">Register</button>
+                </div>
+                <!-- LOGIN TAB -->
+                <div id="login-tab">
+                    <h3>Login</h3>
+                    <input type="text" id="login-username" placeholder="Username" /><br />
+                    <input type="password" id="login-password" placeholder="Password" /><br />
+                    <button class="btn" onclick="loginUser()">Login</button>
+                    <div id="login-error" class="error-message"></div>
+                </div>
+                <!-- REGISTER TAB -->
+                <div id="register-tab" style="display: none;">
+                    <h3>Register</h3>
+                    <input type="text" id="reg-username" placeholder="Username" /><br />
+                    <input type="text" id="reg-name" placeholder="Name" /><br />
+                    <input type="number" id="reg-age" placeholder="Age" /><br />
+                    <input type="text" id="reg-country" placeholder="Country" /><br />
+                    <input type="password" id="reg-password" placeholder="Password" /><br />
+                    <button class="btn" onclick="registerUser()">Register</button>
+                    <div id="register-error" class="error-message"></div>
+                </div>
+            </div>
+
+            <!-- Profile Tabs -->
+            <div id="profile-tabs" style="display: none;">
+                <div style="margin-bottom: 5px;">
+                    <button id="profile-tab-btn" class="tab-btn active" onclick="showProfileInfo()">Profile
+                        Info</button>
+                    <button id="movies-tab-btn" class="tab-btn" onclick="showUserMovies()">My Movies</button>
+                </div>
+                <div id="profile-info">
+                    <p id="profile-name"></p>
+                    <button class="btn" onclick="deleteProfile()">Delete Profile</button>
+                    <button class="btn" onclick="logoutUser()">Logout</button>
+                </div>
+                <div id="user-movies" style="display: none;">
+                    <!-- Display liked/disliked movies using a table -->
+                    <div id="movies-table-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,53 @@
+[33mcommit 6c1aebd4008bc99e63f23c89b32e2fbf35e2ca03[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mbackend[m[33m)[m
+Author: Waleed Gul <84980384+waleedgul92@users.noreply.github.com>
+Date:   Wed Mar 5 10:29:03 2025 +0000
+
+    added intiial loop
+
+[33mcommit e69239e8315e4f2825824fecb3d13270e3872b56[m[33m ([m[1;31morigin/backend[m[33m)[m
+Author: Waleed Gul <84980384+waleedgul92@users.noreply.github.com>
+Date:   Tue Mar 4 16:40:19 2025 +0000
+
+    added feedback for content based
+
+[33mcommit d02cc0d2ed3fdc16be29f4427b57c8b1f9567496[m
+Author: Waleed Gul <84980384+waleedgul92@users.noreply.github.com>
+Date:   Tue Mar 4 12:01:47 2025 +0000
+
+    added code to retain data
+
+[33mcommit 68e474b9319a7fb52b061c6ba89868d0f4b8e822[m
+Author: Waleed Gul <84980384+waleedgul92@users.noreply.github.com>
+Date:   Tue Mar 4 11:08:31 2025 +0000
+
+    added content based
+
+[33mcommit 8dd13d4d84b73b76e3b3425cc832f1ab364a2f1b[m
+Author: Waleed Gul <84980384+waleedgul92@users.noreply.github.com>
+Date:   Tue Mar 4 06:52:13 2025 +0000
+
+    added random_suggestes_movies
+
+[33mcommit 292f4f735738996189b2e0f024dd7c824ab872a4[m[33m ([m[1;31morigin/frontend[m[33m, [m[1;32mfrontend[m[33m)[m
+Author: Waleed Gul <84980384+waleedgul92@users.noreply.github.com>
+Date:   Tue Mar 4 01:55:29 2025 +0000
+
+    modified frontend
+
+[33mcommit 81f4a8704cc6898a79f2c3d9b9088ca64ee9bafa[m
+Author: Waleed Gul <84980384+waleedgul92@users.noreply.github.com>
+Date:   Tue Mar 4 01:35:20 2025 +0000
+
+    added frontend
+
+[33mcommit 34286043879bbaf5f9aed4618d08fdd18ad46c0e[m[33m ([m[1;32mmain[m[33m)[m
+Author: Mohsin Mirza <91544857+Mohsin-Ali-Mirza@users.noreply.github.com>
+Date:   Tue Mar 4 11:22:56 2025 +0100
+
+    docker-to-mongodb-done
+
+[33mcommit c755e2c1e1309e33038d1c883dbdc4623aee85d4[m
+Author: Mohsin Mirza <91544857+Mohsin-Ali-Mirza@users.noreply.github.com>
+Date:   Tue Mar 4 13:42:58 2025 +0500
+
+    Initial commit
